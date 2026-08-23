@@ -69,7 +69,7 @@ export function buildRefuteUserPrompt(
 
   // ── Diff ──
   if (diff) {
-    sections.push(`## Unified Diff\n\n\`\`\`diff\n${diff}\n\`\`\``);
+    sections.push(`## Unified Diff\n\n<data-block label="diff">\n` + "```diff\n" + `${diff}\n` + "```\n</data-block>");
   }
 
   // ── Findings to evaluate ──

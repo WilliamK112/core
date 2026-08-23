@@ -93,7 +93,7 @@ export function buildUserPrompt(
 
   // ── PR context ──
   if (prDescription) {
-    sections.push(`## PR Description\n\n${prDescription}`);
+    sections.push(`## PR Description\n\n<data-block label=\"pr-description\">\n${prDescription}\n</data-block>`);
   }
 
   // ── Changed files summary ──
@@ -147,7 +147,7 @@ export function buildUserPrompt(
     .join("\n\n");
 
   if (fileContents) {
-    sections.push(`## Changed File Contents\n\n${fileContents}`);
+    sections.push(`## Changed File Contents\n\n<data-block label="changed-file-contents">\n${fileContents}\n</data-block>`);
   }
 
   // ── Neighborhood file contents ──
@@ -159,13 +159,13 @@ export function buildUserPrompt(
 
   if (neighborhoodContents) {
     sections.push(
-      `## Neighborhood File Contents (for blast radius context)\n\n${neighborhoodContents}`,
+      `## Neighborhood File Contents (for blast radius context)\n\n<data-block label="neighborhood-file-contents">\n${neighborhoodContents}\n</data-block>`,
     );
   }
 
   // ── Diff ──
   if (context.diff) {
-    sections.push(`## Unified Diff\n\n\`\`\`diff\n${context.diff}\n\`\`\``);
+    sections.push(`## Unified Diff\n\n<data-block label="diff">\n` + "```diff\n" + `${context.diff}\n` + "```\n</data-block>");
   }
 
   // ── Previously dismissed findings (don't re-raise reworded restatements) ──
