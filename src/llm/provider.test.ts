@@ -441,6 +441,7 @@ describe("AnthropicProvider", () => {
       temperature: 0.2,
       maxTokens: 4096,
       timeoutSeconds: 30,
+      retries: 2,
     });
 
     const result = await provider.review("system prompt", "user prompt");
@@ -480,6 +481,7 @@ describe("AnthropicProvider", () => {
       temperature: 0.2,
       maxTokens: 4096,
       timeoutSeconds: 30,
+      retries: 2,
     });
 
     const result = await provider.review("system", "user");
@@ -499,6 +501,7 @@ describe("AnthropicProvider", () => {
       temperature: 0.2,
       maxTokens: 4096,
       timeoutSeconds: 30,
+      retries: 2,
     });
 
     await expect(provider.review("system", "user")).rejects.toThrow(/ANTHROPIC_API_KEY/);
@@ -535,6 +538,7 @@ describe("OllamaProvider — Ollama Cloud auth", () => {
       model: "glm-5.2:cloud",
       temperature: 0.2,
       timeoutSeconds: 30,
+      retries: 2,
       apiKey: "ollama-cloud-test-key",
       apiKeyEnvVar: "OLLAMA_API_KEY",
     });
@@ -558,6 +562,7 @@ describe("OllamaProvider — Ollama Cloud auth", () => {
       model: "codellama",
       temperature: 0.2,
       timeoutSeconds: 30,
+      retries: 2,
     });
 
     await provider.review("system prompt", "user prompt");
@@ -625,6 +630,7 @@ describe("OllamaProvider — Ollama Cloud auth", () => {
       model: "glm-5.2:cloud",
       temperature: 0.2,
       timeoutSeconds: 30,
+      retries: 2,
       apiKey: "bad-key",
       apiKeyEnvVar: "OLLAMA_API_KEY",
     });

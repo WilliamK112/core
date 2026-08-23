@@ -97,6 +97,7 @@ llm:
   temperature: 0.2
   max_tokens: 4096
   timeout_seconds: 120     # timeout for LLM API calls
+  retries: 2                  # max retries for 429/5xx responses (0 = no retries)
   # reasoning_effort: medium # low | medium | high — for GPT-OSS / o-series models that support it;
 
 # ── Deterministic tools ────────────────────────────────────

@@ -11,6 +11,7 @@
 
 import type { Finding, Severity, Category } from "../schemas/findings.js";
 import { computeFingerprint } from "../dismissals/fingerprint.js";
+import { withRetry } from "./retry.js";
 
 // ─── Custom error classes ────────────────────────────────────────────────────
 
@@ -106,6 +107,7 @@ export function createProvider(config: FlaughtConfig): LLMProvider {
         maxTokens: config.llm.max_tokens,
         timeoutSeconds: config.llm.timeout_seconds,
         reasoningEffort: config.llm.reasoning_effort,
+        retries: config.llm.retries,
       });
 
     case "groq":
@@ -121,6 +123,7 @@ export function createProvider(config: FlaughtConfig): LLMProvider {
         maxTokens: config.llm.max_tokens,
         timeoutSeconds: config.llm.timeout_seconds,
         reasoningEffort: config.llm.reasoning_effort,
+        retries: config.llm.retries,
       });
 
     case "gemini":
@@ -136,6 +139,7 @@ export function createProvider(config: FlaughtConfig): LLMProvider {
         maxTokens: config.llm.max_tokens,
         timeoutSeconds: config.llm.timeout_seconds,
         reasoningEffort: config.llm.reasoning_effort,
+        retries: config.llm.retries,
       });
 
     case "anthropic":
@@ -156,6 +160,7 @@ export function createProvider(config: FlaughtConfig): LLMProvider {
         temperature: config.llm.temperature,
         maxTokens: config.llm.max_tokens,
         timeoutSeconds: config.llm.timeout_seconds,
+        retries: config.llm.retries,
       });
 
     case "ollama": {
@@ -179,6 +184,7 @@ export function createProvider(config: FlaughtConfig): LLMProvider {
         // default-sentinel env var hint in error messages for a provider
         // that doesn't need one.
         apiKeyEnvVar: ollamaApiKeyConfigured ? config.llm.api_key_env : undefined,
+        retries: config.llm.retries,
       });
     }
 
@@ -203,6 +209,8 @@ export interface OpenAICompatibleConfig {
   timeoutSeconds: number;
   /** Reasoning effort for models that support it (null = omit) */
   reasoningEffort: string | null;
+  /** Maximum retries for 429/5xx responses (0 = no retries) */
+  retries: number;
 }
 
 export class OpenAICompatibleProvider implements LLMProvider {
@@ -220,6 +228,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
     systemPrompt: string,
     userPrompt: string,
   ): Promise<LLMReviewResult> {
+    return withRetry(async () => {
     const url = `${this.config.baseUrl.replace(/\/+$/, "")}/chat/completions`;
 
     const body: Record<string, unknown> = {
@@ -306,6 +315,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
           }
         : undefined,
     };
+  }, { maxRetries: this.config.retries });
   }
 }
 
@@ -331,6 +341,8 @@ export interface AnthropicConfig {
   temperature: number;
   maxTokens: number;
   timeoutSeconds: number;
+  /** Maximum retries for 429/5xx responses (0 = no retries) */
+  retries: number;
 }
 
 export class AnthropicProvider implements LLMProvider {
@@ -348,6 +360,7 @@ export class AnthropicProvider implements LLMProvider {
     systemPrompt: string,
     userPrompt: string,
   ): Promise<LLMReviewResult> {
+    return withRetry(async () => {
     const url = `${this.config.baseUrl.replace(/\/+$/, "")}/messages`;
 
     const body = {
@@ -426,6 +439,7 @@ export class AnthropicProvider implements LLMProvider {
           }
         : undefined,
     };
+  }, { maxRetries: this.config.retries });
   }
 }
 
@@ -444,6 +458,8 @@ export interface OllamaConfig {
    */
   apiKey?: string;
   apiKeyEnvVar?: string;
+  /** Maximum retries for 429/5xx responses (0 = no retries) */
+  retries: number;
 }
 
 export class OllamaProvider implements LLMProvider {
@@ -461,6 +477,7 @@ export class OllamaProvider implements LLMProvider {
     systemPrompt: string,
     userPrompt: string,
   ): Promise<LLMReviewResult> {
+    return withRetry(async () => {
     const url = `${this.config.baseUrl.replace(/\/+$/, "")}/api/chat`;
 
     const body = {
@@ -561,6 +578,7 @@ export class OllamaProvider implements LLMProvider {
           }
         : undefined,
     };
+  }, { maxRetries: this.config.retries });
   }
 }
 

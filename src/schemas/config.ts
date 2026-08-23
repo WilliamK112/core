@@ -36,6 +36,12 @@ const LlmSchema = z.object({
   max_tokens: z.number().int().positive().default(4096),
   timeout_seconds: z.number().int().positive().default(120),
   /**
+   * Maximum number of retries for transient failures (429 rate limit, 5xx server
+   * errors). Each retry waits with exponential backoff: 1s, 2s, 4s, etc., with
+   * jitter. Set to 0 to disable retries (fail immediately on 429/5xx).
+   */
+  retries: z.number().int().min(0).max(5).default(2),
+  /**
    * Reasoning effort for models that support it (GPT-OSS on Groq, OpenAI o-series).
    * Controls how much compute the model spends on reasoning. Higher values produce
    * more thorough analysis but take longer and cost more.
