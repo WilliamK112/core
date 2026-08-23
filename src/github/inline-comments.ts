@@ -18,7 +18,7 @@ import type { Finding, FindingsArtifact } from "../schemas/findings.js";
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export interface GitHubConfig {
-  /** GitHub API token */
+  /** GitHub API token — never serialized or logged */
   token: string;
   /** Repository in owner/repo format (e.g. "flaught/core") */
   repository: string;
@@ -330,13 +330,24 @@ export async function detectGitHubConfig(): Promise<GitHubConfig | null> {
     ? ((pullRequest.head as Record<string, unknown>).sha as string)
     : "";
 
-  return {
-    token,
+  // SECURITY: Return the config with the token as a non-enumerable property
+  // so it won't appear in JSON.stringify(), console.log(), or structured
+  // log output. The token is still accessible via config.token for the
+  // HTTP calls that need it, but accidental serialization is prevented.
+  const config: GitHubConfig = {
     repository,
     pullNumber,
     baseSha,
     headSha,
-  };
+  } as GitHubConfig;
+  Object.defineProperty(config, 'token', {
+    value: token,
+    enumerable: false, // Won't show in JSON.stringify, console.log, or spread
+    writable: false,
+    configurable: false,
+  });
+
+  return config;
 }
 
 // ─── Format inline comment summary header ───────────────────────────────────

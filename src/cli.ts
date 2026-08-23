@@ -246,13 +246,19 @@ async function runCliReview(opts: {
           : undefined;
 
         if (token && repo && prNum && !isNaN(prNum)) {
+          // SECURITY: Make token non-enumerable so it won't appear in logs or JSON output
           githubConfig = {
-            token,
             repository: repo,
             pullNumber: prNum,
             baseSha: result.context.baseSha,
             headSha: result.context.headSha,
-          };
+          } as GitHubConfig;
+          Object.defineProperty(githubConfig, 'token', {
+            value: token,
+            enumerable: false,
+            writable: false,
+            configurable: false,
+          });
         }
       }
 
