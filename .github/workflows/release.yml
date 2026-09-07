@@ -1,0 +1,62 @@
+# Release: publish @flaught/core to npm via OIDC trusted publishing.
+#
+# No long-lived NPM_TOKEN. GitHub mints a short-lived OIDC token that npm
+# accepts only from this workflow (configured as a trusted publisher on
+# npmjs.com). Requires npm CLI >= 11.5.1, which ships with Node 24 — Node
+# 22's npm 10 cannot do the OIDC exchange, so this job pins Node 24.
+#
+# Trigger: push a v* tag (e.g. `npm version 1.2.3 && git push --follow-tags`)
+# or run manually via the Actions tab ("Run workflow").
+#
+# npm-side setup (one time): npmjs.com → @flaught/core → Settings → Trusted
+# Publishing → add a GitHub Actions publisher with:
+#   Organization/user: flaught
+#   Repository:       core
+#   Workflow file:    release.yml   (must match this filename exactly, incl. .yml)
+#   Environment:      (leave blank — this workflow uses no environment)
+#   Allowed actions:  npm publish
+#
+# Provenance is attached automatically by trusted publishing (no --provenance
+# flag needed). After the first successful OIDC publish, harden by setting the
+# package's Publishing access to "Require 2FA and disallow tokens" and revoking
+# any leftover publish tokens.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write   # required for the OIDC token exchange
+
+concurrency:
+  group: release
+  cancel-in-progress: false   # never cancel a publish mid-flight
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest   # OIDC requires a GitHub-hosted runner
+    steps:
+      # Pinned to commit SHA for supply-chain integrity (matches adversarial-review.yml).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 24   # ships npm 11.5.1+, which OIDC requires
+          registry-url: https://registry.npmjs.org
+          # No `cache:` input — never use a package cache for a release build.
+
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+
+      - run: npm publish
+        # NOTE: do NOT set NODE_AUTH_TOKEN here — not even to "". An empty
+        # string is treated as a value and npm skips the OIDC fallback,
+        # failing with ENEEDAUTH. Leaving the env block off entirely is what
+        # makes npm use trusted publishing. (`npm publish` also runs the
+        # project's prepublishOnly = build + full test, re-gating the release.)
