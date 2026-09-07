@@ -60,6 +60,7 @@ program
     const promptDir = initPromptTemplates(opts.dir);
     console.log(`Created ${promptDir}/ with example template files`);
     console.log(`\nEdit the .example files to customize prompts. Remove .example to activate a template.`);
+    console.log(`Note: dependency sanity is on by default and queries registry.npmjs.org / api.npmjs.org for packages added in package.json. Set tools.dependency_sanity.enabled: false to disable outbound network calls.`);
   });
 
 program
@@ -325,9 +326,13 @@ async function runCliReview(opts: {
   }
 
   // Exit code based on severity gate
-  if (result.exitCode !== 0) {
+  if (result.exitCode === 1) {
     console.error(
-      `\n⛔ Exiting with code ${result.exitCode}: undismissed findings at or above severity gate threshold`,
+      `\n⛔ Exiting with code 1: undismissed findings at or above severity gate threshold`,
+    );
+  } else if (result.exitCode === 2) {
+    console.error(
+      `\n⚠️ Exiting with code 2: a deterministic tool could not complete reliably (not a verdict)`,
     );
   }
   process.exit(result.exitCode);

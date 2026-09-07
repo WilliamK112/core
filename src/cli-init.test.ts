@@ -40,5 +40,6 @@ describe("flaught init", () => {
     expect(raw).toHaveProperty("llm.provider", "groq");
     expect(fs.existsSync(path.join(dir, ".flaught-prompt", "system-append.md.example"))).toBe(true);
     expect(console.log).toHaveBeenCalledWith(`Created ${path.join(dir, ".advreview.yml")}`);
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining("registry.npmjs.org"));
   });
 });

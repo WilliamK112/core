@@ -56,6 +56,11 @@ llm:
 #   vuln_scanner:
 #     enabled: true
 #     command: npm audit                     # override auto-detected scanner
+#   dependency_sanity:
+#     enabled: true
+#     min_age_days: 30                      # flag packages younger than this
+#     min_weekly_downloads: 10             # flag packages below this weekly download count
+#     typosquat_max_distance: 1            # Levenshtein distance to a popular package name
 #   test_weakening:
 #     enabled: true
 
@@ -287,7 +292,7 @@ Controls whether Flaught exits with code 1 (findings exceed threshold) or 0 (cle
 
 | `fail_on` | Exits 1 when |
 |---|---|
-| `none` | Never (always exits 0) |
+| `none` | Never exits 1 for findings. A tool fault (currently only `dependency_sanity` registry outage) still exits 2. |
 | `critical` | Any undismissed critical finding |
 | `high` | Any undismissed high or critical finding |
 | `medium` | Any undismissed medium, high, or critical finding |
@@ -330,9 +335,31 @@ Flaught auto-detects which tools to run based on your repo contents:
 | **Semgrep** | Always tries; skips gracefully if not installed | `tools.semgrep.enabled`, `tools.semgrep.config` |
 | **Linter** | `eslint` (JS/TS), `ruff`/`flake8` (Python), `go vet` (Go) | `tools.linter.enabled`, `tools.linter.command` |
 | **Vuln scanner** | `npm audit` (JS), `pip-audit` (Python), `govulncheck` (Go) | `tools.vuln_scanner.enabled`, `tools.vuln_scanner.command` |
+| **Dependency sanity** | Added `package.json` deps vs the npm registry (queries npm; see below) | `tools.dependency_sanity.enabled`, `min_age_days`, `min_weekly_downloads`, `typosquat_max_distance` |
 | **Test weakening** | Checks the diff for removed assertions, loosened matchers, skips, commented-out test bodies, and deleted test files | `tools.test_weakening.enabled` |
 
 All tools degrade gracefully — if a tool isn't installed, Flaught skips it and continues. Findings from deterministic tools are tagged `source_type: "deterministic"` with confidence 1.0.
+
+### Dependency sanity
+
+For packages **added** in `package.json` (`dependencies`, `devDependencies`, `peerDependencies`, `optionalDependencies` — version bumps of existing names are ignored), Flaught queries the npm registry:
+
+| Check | Default | Severity |
+|---|---|---|
+| Registry existence (`GET registry.npmjs.org/<name>`) | 404 → finding | high |
+| Package age (`time.created`) | younger than `min_age_days` (30) | medium |
+| Weekly downloads | below `min_weekly_downloads` (10) | low |
+| Typosquat (Levenshtein vs popular names, e.g. `reactt` → `react`) | distance ≤ `typosquat_max_distance` (1) | high |
+
+Added vs removed names are computed from parsed `package.json` files (`git show <base>` vs `<head>`), so a formatter reordering keys does not hide a genuine add.
+
+This check is **on by default** and makes outbound HTTP calls to `registry.npmjs.org` and `api.npmjs.org` (User-Agent `flaught-dependency-sanity`). Every other default-on tool runs locally. Set `tools.dependency_sanity.enabled: false` to disable.
+
+Network failures are not treated as malicious packages: one failed request warns and continues; a registry outage records a tool fault (exit 2) instead of a verdict. `severity_gate.fail_on: none` still yields exit 2 on that fault: a fault is not a finding.
+
+Local specs (`workspace:`, `file:`, git URLs) are skipped for both registry lookups **and** typosquat (a local `reactt` is not a supply-chain signal). Typosquat only compares against a hardcoded list of ~90 popular names (`POPULAR_PACKAGES`); names outside that list are not checked for impersonation.
+
+`dependency-low-downloads` is categorized as `maintainability`; existence, age, and typosquat findings are `security`.
 
 ## Test inversion
 

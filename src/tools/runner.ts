@@ -14,6 +14,7 @@
 
 import { type FlaughtConfig } from "../schemas/config.js";
 import { type ToolExecuted } from "../schemas/findings.js";
+import { runDependencySanityCheck } from "./dependency-sanity.js";
 import { detectTestWeakening } from "./test-weakening.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -212,6 +213,41 @@ export async function runDeterministicTools(
     });
     allFindings.push(...result.findings);
     progress(`    vuln_scanner: ${result.findings.length} findings (${result.durationMs}ms)`);
+  }
+
+  // ── Dependency sanity (added npm packages) ──
+  if (config.tools.dependency_sanity.enabled) {
+    progress("  Running dependency sanity...");
+    const startTime = Date.now();
+    const sanity = await runDependencySanityCheck({
+      repoPath,
+      baseRef,
+      headRef,
+      minAgeDays: config.tools.dependency_sanity.min_age_days,
+      minWeeklyDownloads: config.tools.dependency_sanity.min_weekly_downloads,
+      typosquatMaxDistance: config.tools.dependency_sanity.typosquat_max_distance,
+      onWarn: (message) => progress(`    ⚠ ${message}`),
+    });
+    const durationMs = Date.now() - startTime;
+    const result: ToolResult = {
+      tool: "dependency_sanity",
+      success: !sanity.fault,
+      stdout: "",
+      stderr: sanity.warnings.join("\n"),
+      exitCode: sanity.fault ? 2 : 0,
+      findings: sanity.findings,
+      durationMs,
+    };
+    results.push(result);
+    executions.push({
+      tool: "dependency_sanity",
+      version: "builtin",
+      exit_code: result.exitCode,
+      raw_findings_count: result.findings.length,
+      command: sanity.fault ? "(failed)" : "npm-registry",
+    });
+    allFindings.push(...result.findings);
+    progress(`    dependency_sanity: ${result.findings.length} findings (${result.durationMs}ms)`);
   }
 
   return { results, executions, findings: allFindings };

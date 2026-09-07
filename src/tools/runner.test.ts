@@ -50,6 +50,7 @@ describe("test weakening tool runner", () => {
         semgrep: { enabled: false },
         linter: { enabled: false },
         vuln_scanner: { enabled: false },
+        dependency_sanity: { enabled: false },
         test_weakening: { enabled: true },
       },
     });
@@ -74,6 +75,7 @@ describe("test weakening tool runner", () => {
           semgrep: { enabled: false },
           linter: { enabled: false },
           vuln_scanner: { enabled: false },
+          dependency_sanity: { enabled: false },
           test_weakening: { enabled: false },
         },
       }),

@@ -31,6 +31,8 @@ tools:
     enabled: true
   vuln_scanner:
     enabled: true
+  dependency_sanity:
+    enabled: true
 
 # Run tests against pre-change code to detect missing coverage.
 # https://github.com/flaught/core/blob/main/docs/configuration.md#test-inversion
@@ -119,7 +121,7 @@ export function initConfig(targetDir: string, options: { paranoid?: boolean } = 
 # IMPORTANT: every commented-out block below (tools, test_inversion,
 # scope_creep, noise_budget, severity_gate, dismissals) shows this schema's
 # ACTUAL DEFAULT, already in effect whether or not you uncomment it —
-# including tools.semgrep/linter/vuln_scanner/test_weakening, all enabled by default.
+# including tools.semgrep/linter/vuln_scanner/dependency_sanity/test_weakening, all enabled by default.
 # Commenting a block back out does NOT disable it; only an explicit
 # \`enabled: false\` (or other overriding value) changes behavior. Uncomment
 # a block to inspect or override its default, not to "turn it on."
@@ -156,6 +158,11 @@ llm:
 #   vuln_scanner:
 #     enabled: true
 #     # command: npm audit  # override auto-detected scanner
+#   dependency_sanity:
+#     enabled: true
+#     min_age_days: 30
+#     min_weekly_downloads: 10
+#     typosquat_max_distance: 1
 #   test_weakening:
 #     enabled: true
 

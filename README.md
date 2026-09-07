@@ -70,6 +70,10 @@ flaught review --output findings.json --quiet   # CI mode
 flaught dismiss D-0002 --artifact findings.json --reason "..." # suppress a false positive, persisted across runs
 ```
 
+`--no-llm` still runs dependency sanity on newly added `package.json` packages.
+That check queries the public npm registry (`registry.npmjs.org` / `api.npmjs.org`)
+by default. Set `tools.dependency_sanity.enabled: false` to keep reviews fully offline.
+
 For zero-question setup, use `flaught init --paranoid` instead of plain `init`.
 It writes explicit settings for all deterministic tools, test inversion,
 scope-creep detection, a high-severity gate, and persistent dismissals, with
