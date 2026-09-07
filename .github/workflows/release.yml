@@ -47,13 +47,15 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24   # ships npm 11.5.1+, which OIDC requires
-          # No `registry-url`: with it, setup-node writes an .npmrc that reads
-          # auth from env.NODE_AUTH_TOKEN, and npm then uses that token instead
-          # of falling back to OIDC (an empty NODE_AUTH_TOKEN is NOT the same as
-          # absent). Omitting registry-url leaves the default registry
-          # (registry.npmjs.org) and lets npm 11 auto-detect the OIDC
-          # environment from id-token: write.
+          registry-url: https://registry.npmjs.org
           package-manager-cache: false   # never use a package cache for a release build
+          # NOTE: setup-node writes an .npmrc reading auth from ${NODE_AUTH_TOKEN}
+          # and exports a placeholder NODE_AUTH_TOKEN ('XXXXX-...') when none is
+          # set. That placeholder is intentionally invalid so npm falls back to
+          # OIDC. If publish fails with E404/ENEEDAUTH here, the cause is a
+          # trusted-publisher CONFIG MISMATCH on npmjs.com (workflow filename /
+          # repo / environment / allowed-actions), NOT this workflow — verify
+          # the npm-side config matches this file exactly (see header comment).
 
       - run: npm ci
       - run: npm run build
