@@ -48,7 +48,12 @@ Pick your environment and paste:
 Install and run Flaught (adversarial code review) on this project:
 npm install -g @flaught/core, then `flaught init` to scaffold config,
 then `flaught review --no-llm` to run deterministic checks — no API
-key needed. Fix anything it flags and re-run until clean.
+key needed.
+
+When Flaught reports findings:
+- Fix findings you're confident are real.
+- Report the rest verbatim.
+- Never dismiss a finding; dismissal is a human action.
 
 For the full LLM adversarial pass, set an API key (GROQ_API_KEY by
 default; for another provider, also set llm.provider/api_key_env in
