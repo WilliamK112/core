@@ -47,8 +47,13 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24   # ships npm 11.5.1+, which OIDC requires
-          registry-url: https://registry.npmjs.org
-          # No `cache:` input — never use a package cache for a release build.
+          # No `registry-url`: with it, setup-node writes an .npmrc that reads
+          # auth from env.NODE_AUTH_TOKEN, and npm then uses that token instead
+          # of falling back to OIDC (an empty NODE_AUTH_TOKEN is NOT the same as
+          # absent). Omitting registry-url leaves the default registry
+          # (registry.npmjs.org) and lets npm 11 auto-detect the OIDC
+          # environment from id-token: write.
+          package-manager-cache: false   # never use a package cache for a release build
 
       - run: npm ci
       - run: npm run build
