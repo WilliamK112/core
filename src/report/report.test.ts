@@ -192,6 +192,18 @@ describe("renderMarkdownReport", () => {
     expect(md).toContain("Schema v3");
   });
 
+  it("includes the run-local finding ID caveat in the footer", () => {
+    const artifact = makeArtifact();
+    const md = renderMarkdownReport(artifact);
+    const footerStart = md.lastIndexOf("---");
+    const caveat =
+      "Finding IDs are local to this run and differ on re-review of the same diff; " +
+      "the fingerprint (shown after a dismiss) is the stable identifier.";
+
+    expect(footerStart).toBeGreaterThanOrEqual(0);
+    expect(md.indexOf(caveat, footerStart)).toBeGreaterThan(footerStart);
+  });
+
   it("warns when the LLM review failed", () => {
     const artifact = makeArtifact({
       run: { id: "flaught-1", ci_url: null, duration_seconds: 5, llm_error: "Groq API error: 400 Bad Request" },

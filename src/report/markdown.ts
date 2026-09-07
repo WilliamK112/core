@@ -9,7 +9,7 @@
  */
 
 import type { FindingsArtifact, Finding, Severity } from "../schemas/findings.js";
-import { CAVEAT } from "../schemas/findings.js";
+import { CAVEAT, FINDING_ID_CAVEAT } from "../schemas/findings.js";
 
 const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low", "info"];
 
@@ -268,6 +268,7 @@ function renderFinding(f: Finding): string {
 function renderFooter(artifact: FindingsArtifact): string {
   return [
     "---",
+    FINDING_ID_CAVEAT,
     `*Flaught v${artifact.flaught_version} · Schema v${artifact.schema_version} · ${artifact.generated_at}*`,
   ].join("\n");
 }

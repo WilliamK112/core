@@ -27,7 +27,7 @@ import { initConfig, loadConfig } from "./config.js";
 import { LLMError, MissingAPIKeyError } from "./llm/provider.js";
 import { ModelNotFoundError } from "./llm/liveness.js";
 import { postInlineReview, buildInlineSummaryHeader, detectGitHubConfig, type GitHubConfig } from "./github/inline-comments.js";
-import type { FindingsArtifact } from "./schemas/findings.js";
+import { FINDING_ID_CAVEAT, type FindingsArtifact } from "./schemas/findings.js";
 import type { DismissalEntry } from "./schemas/dismissals.js";
 import {
   loadDismissalStore,
@@ -376,6 +376,8 @@ async function runDismiss(
     config?: string;
   },
 ): Promise<void> {
+  console.log(FINDING_ID_CAVEAT);
+
   const repoPath = opts.repo ? path.resolve(opts.repo) : process.cwd();
   const config = await loadConfig(opts.config);
 
