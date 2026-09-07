@@ -33,6 +33,8 @@ tools:
     enabled: true
   dependency_sanity:
     enabled: true
+  test_weakening:
+    enabled: true
 
 # Run tests against pre-change code to detect missing coverage.
 # https://github.com/flaught/core/blob/main/docs/configuration.md#test-inversion

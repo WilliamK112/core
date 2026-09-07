@@ -9,7 +9,8 @@ Everything has sensible defaults — a repo can run with zero config. Override o
 Run `flaught init --paranoid` for zero-question setup, or
 `flaught init --paranoid --dir /path/to/repo` to choose the target directory.
 The generated `.advreview.yml` explicitly enables Semgrep, the linter, the
-vulnerability scanner, test inversion, scope-creep detection, and dismissals
+vulnerability scanner, the built-in test-weakening and dependency-sanity
+checks, test inversion, scope-creep detection, and dismissals
 stored in `.flaught-dismissals.json`. It sets `severity_gate.fail_on: high` and
 uses Groq with `openai/gpt-oss-20b` and `api_key_env: GROQ_API_KEY`.
 

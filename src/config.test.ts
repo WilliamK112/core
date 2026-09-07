@@ -110,6 +110,7 @@ describe("initConfig", () => {
         linter: { enabled: true },
         vuln_scanner: { enabled: true },
         dependency_sanity: { enabled: true },
+        test_weakening: { enabled: true },
       },
       test_inversion: { enabled: true },
       scope_creep: { enabled: true },
