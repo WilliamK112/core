@@ -412,6 +412,97 @@ describe("reasoning_effort", () => {
   });
 });
 
+describe("OpenAICompatibleProvider — 400 failed_generation retry", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.GROQ_API_KEY;
+  });
+
+  function groqConfig() {
+    return FlaughtConfigSchema.parse({
+      llm: { provider: "groq", model: "openai/gpt-oss-20b", api_key_env: "GROQ_API_KEY" },
+    });
+  }
+
+  /** A real Response (supports .clone()/.json()) so the retry path's
+   *  read400Body(response.clone()) works without hand-rolling a mock. */
+  function jsonResponse(body: unknown, status: number): Response {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  it("retries once on a 400 with failed_generation and returns findings on success", async () => {
+    process.env.GROQ_API_KEY = "gsk-test";
+    const provider = createProvider(groqConfig());
+
+    const failed = jsonResponse(
+      { error: { message: "failed_generation" }, failed_generation: '{"findings":' },
+      400,
+    );
+    const ok = jsonResponse(
+      { choices: [{ message: { content: '{"findings":[]}' } }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } },
+      200,
+    );
+    const fetchMock = vi.fn().mockResolvedValueOnce(failed).mockResolvedValueOnce(ok);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.review("system", "user");
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.findings).toEqual([]);
+  });
+
+  it("throws after retry is exhausted, surfacing the failed_generation snippet + truncation hint", async () => {
+    process.env.GROQ_API_KEY = "gsk-test";
+    const provider = createProvider(groqConfig());
+
+    const failed = jsonResponse(
+      { error: { message: "failed_generation" }, failed_generation: '{"findings":[{"id":"D-1"' },
+      400,
+    );
+    const fetchMock = vi.fn().mockResolvedValue(failed);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(provider.review("system", "user")).rejects.toThrow(/failed_generation/);
+    expect(fetchMock).toHaveBeenCalledTimes(2); // initial + one retry
+    try {
+      await provider.review("system", "user");
+    } catch (err) {
+      const msg = (err as Error).message;
+      expect(msg).toContain("truncation problem");
+      expect(msg).toContain("llm.max_tokens");
+      expect(msg).toContain("reasoning_effort");
+      expect(msg).toContain("{\"findings\":[{\"id\":\"D-1\""); // snippet
+    }
+  });
+
+  it("does NOT retry a 400 without failed_generation (fetch called once)", async () => {
+    process.env.GROQ_API_KEY = "gsk-test";
+    const provider = createProvider(groqConfig());
+
+    const failed = jsonResponse({ error: { message: "invalid_request: bad param" } }, 400);
+    const fetchMock = vi.fn().mockResolvedValue(failed);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(provider.review("system", "user")).rejects.toThrow(/Bad request/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT retry non-400 errors (e.g., 401)", async () => {
+    process.env.GROQ_API_KEY = "gsk-test";
+    const provider = createProvider(groqConfig());
+
+    const unauthorized = jsonResponse({ error: { message: "invalid api key" } }, 401);
+    const fetchMock = vi.fn().mockResolvedValue(unauthorized);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(provider.review("system", "user")).rejects.toThrow(/API key/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("AnthropicProvider", () => {
   afterEach(() => {
     vi.unstubAllGlobals();

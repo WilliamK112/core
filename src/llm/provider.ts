@@ -239,49 +239,67 @@ export class OpenAICompatibleProvider implements LLMProvider {
       body.reasoning_effort = this.config.reasoningEffort;
     }
 
-    let response: Response;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.config.timeoutSeconds * 1000);
-    try {
-      response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.config.apiKey}`,
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-    } catch (err) {
-      clearTimeout(timeout);
-      if (err instanceof DOMException && err.name === "AbortError") {
+    // Groq (and other OpenAI-compatible providers) occasionally return 400
+    // with a `failed_generation` field: the JSON-mode grammar enforced valid
+    // JSON only up to a truncation point, so the model never closed the object.
+    // This is frequently transient — the model fails the grammar on an edge
+    // input and succeeds on the next attempt — so retry once before surfacing
+    // the error. Non-400 errors and network failures are not retried.
+    const MAX_ATTEMPTS = 2;
+    let response!: Response;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), this.config.timeoutSeconds * 1000);
+      try {
+        response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.config.apiKey}`,
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+      } catch (err) {
+        clearTimeout(timeout);
+        if (err instanceof DOMException && err.name === "AbortError") {
+          throw new LLMError(
+            `Request to ${this.config.model} timed out after ${this.config.timeoutSeconds}s.\n\n` +
+            `This usually means the diff is too large or the model is slow to respond.\n\n` +
+            `Options:\n` +
+            `  • Increase timeout in .advreview.yml: llm.timeout_seconds: 300\n` +
+            `  • Use a faster model (e.g., groq with llama-3.1-70b)\n` +
+            `  • Run with --no-llm to skip the LLM review entirely`,
+            this.name,
+            this.model,
+          );
+        }
         throw new LLMError(
-          `Request to ${this.config.model} timed out after ${this.config.timeoutSeconds}s.\n\n` +
-          `This usually means the diff is too large or the model is slow to respond.\n\n` +
-          `Options:\n` +
-          `  • Increase timeout in .advreview.yml: llm.timeout_seconds: 300\n` +
-          `  • Use a faster model (e.g., groq with llama-3.1-70b)\n` +
-          `  • Run with --no-llm to skip the LLM review entirely`,
+          `Could not reach ${this.config.model} at ${this.config.baseUrl}.\n\n` +
+          `This usually means:\n` +
+          `  • The model name is misspelled in .advreview.yml\n` +
+          `  • The API endpoint is down or unreachable\n` +
+          `  • The base_url in your config is wrong\n\n` +
+          `Run with --no-llm to skip the LLM review entirely.`,
           this.name,
           this.model,
+          undefined,
+          err instanceof Error ? err.message : String(err),
         );
       }
-      throw new LLMError(
-        `Could not reach ${this.config.model} at ${this.config.baseUrl}.\n\n` +
-        `This usually means:\n` +
-        `  • The model name is misspelled in .advreview.yml\n` +
-        `  • The API endpoint is down or unreachable\n` +
-        `  • The base_url in your config is wrong\n\n` +
-        `Run with --no-llm to skip the LLM review entirely.`,
-        this.name,
-        this.model,
-        undefined,
-        err instanceof Error ? err.message : String(err),
-      );
-    }
 
-    if (!response.ok) {
+      if (response.ok) {
+        clearTimeout(timeout);
+        break;
+      }
+
       clearTimeout(timeout);
+      // Retry once on a transient 400 failed_generation; otherwise classify
+      // and throw immediately (including on the final attempt).
+      if (response.status === 400 && attempt < MAX_ATTEMPTS) {
+        const { failedGeneration } = await read400Body(response);
+        if (failedGeneration !== null) continue;
+      }
       throw await classifyHttpError(response, this.config.baseUrl, this.config.model, this.name, this.config.apiKeyEnvVar);
     }
 
@@ -290,7 +308,6 @@ export class OpenAICompatibleProvider implements LLMProvider {
       usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
     };
 
-    clearTimeout(timeout);
     const raw = data.choices[0]?.message?.content ?? "";
     const findings = parseFindingsFromLLM(raw, this.config.model);
 
@@ -566,6 +583,33 @@ export class OllamaProvider implements LLMProvider {
 
 // ─── HTTP error classification ────────────────────────────────────────────────
 
+/**
+ * Read the error body of a 400 response, returning both the provider's
+ * human-readable error message and Groq's `failed_generation` field (a
+ * truncation signal — the JSON-mode grammar enforced valid JSON only up to
+ * the point the model ran out of tokens, so the object was never closed).
+ * Uses `response.clone()` so the body remains consumable by the caller.
+ */
+async function read400Body(response: Response): Promise<{
+  detail: string;
+  failedGeneration: string | null;
+}> {
+  let detail = "";
+  let failedGeneration: string | null = null;
+  try {
+    const body = await response.clone().json().catch(() => ({} as Record<string, unknown>));
+    const err = (body as Record<string, unknown>)?.error;
+    if (typeof err === "object" && err !== null && typeof (err as Record<string, unknown>).message === "string") {
+      detail = (err as Record<string, unknown>).message as string;
+    } else if (typeof (body as Record<string, unknown>).message === "string") {
+      detail = (body as Record<string, unknown>).message as string;
+    }
+    const fg = (body as Record<string, unknown>).failed_generation;
+    if (typeof fg === "string" && fg.length > 0) failedGeneration = fg;
+  } catch { /* ignore parse errors */ }
+  return { detail, failedGeneration };
+}
+
 async function classifyHttpError(
   response: Response,
   _baseUrl: string,
@@ -586,23 +630,26 @@ async function classifyHttpError(
     case 400: {
       // Bad request — usually model-specific limitations (JSON mode not supported,
       // invalid parameters, etc.). Include the provider's error message for debugging.
-      let detail = "";
-      try {
-        const body = await response.clone().json().catch(() => ({} as Record<string, unknown>));
-        const msg = (body as Record<string, unknown>)?.error;
-        if (typeof msg === "object" && msg !== null && typeof (msg as Record<string, unknown>).message === "string") {
-          detail = (msg as Record<string, unknown>).message as string;
-        } else if (typeof (body as Record<string, unknown>).message === "string") {
-          detail = (body as Record<string, unknown>).message as string;
-        }
-      } catch { /* ignore parse errors */ }
+      const { detail, failedGeneration } = await read400Body(response);
+      // `failed_generation` (Groq) means the JSON-mode grammar enforced valid JSON
+      // only up to a truncation point — the model ran out of tokens before closing
+      // the object. That is a truncation problem, not malformed-JSON, and the fix is
+      // a config knob, not a model swap.
+      const truncationHint = failedGeneration !== null
+        ? `\n\nThe provider returned a \`failed_generation\` field, which means the model's output was truncated before it could produce valid JSON (the JSON-mode grammar enforced valid JSON up to the truncation point). This is a truncation problem, not a malformed-JSON problem.\n\nOptions (in order):\n` +
+          `  • Raise llm.max_tokens in .advreview.yml (e.g., 8192 or 16384)\n` +
+          `  • Set llm.reasoning_effort: low for reasoning models (gpt-oss) so the token budget goes to the JSON output, not chain-of-thought\n` +
+          `  • Switch to a non-reasoning model (e.g., groq/compound, llama-3.3-70b-versatile) that doesn't spend tokens on reasoning\n` +
+          `  • Run with --no-llm to skip the LLM review entirely`
+        : `\n\nThis usually means the model doesn't support a feature Flaught uses (e.g. JSON mode), or the request parameters are invalid.\n\nOptions:\n` +
+          `  • Switch to a different model in .advreview.yml (openai/gpt-oss-120b and openai/gpt-oss-20b are known to work on Groq)\n` +
+          `  • Switch to a different provider (openai, anthropic, ollama)\n` +
+          `  • Run with --no-llm to skip the LLM review entirely`;
+      const snippet = failedGeneration !== null
+        ? `\n\nfailed_generation (first 200 chars):\n${failedGeneration.slice(0, 200)}`
+        : "";
       return new LLMError(
-        `Bad request from ${providerName} for model "${model}" (${status}).${detail ? `\n\n${detail}` : ""}\n\n` +
-        `This usually means the model doesn't support a feature Flaught uses (e.g. JSON mode), or the request parameters are invalid.\n\n` +
-        `Options:\n` +
-        `  • Switch to a different model in .advreview.yml (openai/gpt-oss-120b and openai/gpt-oss-20b are known to work on Groq)\n` +
-        `  • Switch to a different provider (openai, anthropic, ollama)\n` +
-        `  • Run with --no-llm to skip the LLM review entirely`,
+        `Bad request from ${providerName} for model "${model}" (${status}).${detail ? `\n\n${detail}` : ""}${truncationHint}${snippet}`,
         providerName,
         model,
         status,
