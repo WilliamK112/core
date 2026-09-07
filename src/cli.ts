@@ -376,8 +376,6 @@ async function runDismiss(
     config?: string;
   },
 ): Promise<void> {
-  console.log(FINDING_ID_CAVEAT);
-
   const repoPath = opts.repo ? path.resolve(opts.repo) : process.cwd();
   const config = await loadConfig(opts.config);
 
@@ -423,6 +421,7 @@ async function runDismiss(
     context: { title: finding.title, file: finding.evidence.file },
     expires_at: expiresAt,
   };
+  console.log(FINDING_ID_CAVEAT);
   saveDismissalStore(dismissalsPath, addDismissal(store, entry));
 
   console.log(`✅ Dismissed ${findingId}: ${finding.title}`);

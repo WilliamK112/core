@@ -2,7 +2,12 @@ import { describe, it, expect } from "vitest";
 import { renderMarkdownReport } from "./markdown.js";
 import { renderJsonArtifact } from "./json.js";
 import type { FindingsArtifact, Finding, NoiseBudget, Severity } from "../schemas/findings.js";
-import { SCHEMA_VERSION, FINDINGS_SCHEMA_URL, CAVEAT } from "../schemas/findings.js";
+import {
+  SCHEMA_VERSION,
+  FINDINGS_SCHEMA_URL,
+  CAVEAT,
+  FINDING_ID_CAVEAT,
+} from "../schemas/findings.js";
 
 // ─── Test fixtures ────────────────────────────────────────────────────────────
 
@@ -196,12 +201,9 @@ describe("renderMarkdownReport", () => {
     const artifact = makeArtifact();
     const md = renderMarkdownReport(artifact);
     const footerStart = md.lastIndexOf("---");
-    const caveat =
-      "Finding IDs are local to this run and differ on re-review of the same diff; " +
-      "the fingerprint (shown after a dismiss) is the stable identifier.";
 
     expect(footerStart).toBeGreaterThanOrEqual(0);
-    expect(md.indexOf(caveat, footerStart)).toBeGreaterThan(footerStart);
+    expect(md.indexOf(FINDING_ID_CAVEAT, footerStart)).toBeGreaterThan(footerStart);
   });
 
   it("warns when the LLM review failed", () => {

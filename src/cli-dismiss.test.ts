@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { FINDING_ID_CAVEAT } from "./schemas/findings.js";
 
 const originalArgv = process.argv;
 const tempDirs: string[] = [];
@@ -64,10 +65,7 @@ describe("flaught dismiss", () => {
       expect(fs.existsSync(path.join(dir, ".flaught-dismissals.json"))).toBe(true);
     });
 
-    const caveat =
-      "Finding IDs are local to this run and differ on re-review of the same diff; " +
-      "the fingerprint (shown after a dismiss) is the stable identifier.";
-    const caveatIndex = logs.findIndex((line) => line === caveat);
+    const caveatIndex = logs.findIndex((line) => line === FINDING_ID_CAVEAT);
     const dismissedIndex = logs.findIndex((line) => line.startsWith("✅ Dismissed D-0001"));
 
     expect(caveatIndex).toBeGreaterThanOrEqual(0);
