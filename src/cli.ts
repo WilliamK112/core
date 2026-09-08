@@ -27,7 +27,7 @@ import { initConfig, loadConfig } from "./config.js";
 import { LLMError, MissingAPIKeyError } from "./llm/provider.js";
 import { ModelNotFoundError } from "./llm/liveness.js";
 import { postInlineReview, buildInlineSummaryHeader, detectGitHubConfig, type GitHubConfig } from "./github/inline-comments.js";
-import type { FindingsArtifact } from "./schemas/findings.js";
+import { FINDING_ID_CAVEAT, type FindingsArtifact } from "./schemas/findings.js";
 import type { DismissalEntry } from "./schemas/dismissals.js";
 import {
   loadDismissalStore,
@@ -421,6 +421,7 @@ async function runDismiss(
     context: { title: finding.title, file: finding.evidence.file },
     expires_at: expiresAt,
   };
+  console.log(FINDING_ID_CAVEAT);
   saveDismissalStore(dismissalsPath, addDismissal(store, entry));
 
   console.log(`✅ Dismissed ${findingId}: ${finding.title}`);

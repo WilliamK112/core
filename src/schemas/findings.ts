@@ -231,3 +231,7 @@ export const CAVEAT =
   "It is NOT evidence that findings are correct. LLM-asserted findings may include " +
   "hallucinations. Deterministic-tool findings have their own false-positive rates. " +
   "Treat this as a prompt for human review, not as audit-truth.";
+
+export const FINDING_ID_CAVEAT =
+  "Finding IDs are local to this run and differ on re-review of the same diff; " +
+  "the fingerprint (shown after a dismiss) is the stable identifier.";

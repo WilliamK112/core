@@ -2,7 +2,12 @@ import { describe, it, expect } from "vitest";
 import { renderMarkdownReport } from "./markdown.js";
 import { renderJsonArtifact } from "./json.js";
 import type { FindingsArtifact, Finding, NoiseBudget, Severity } from "../schemas/findings.js";
-import { SCHEMA_VERSION, FINDINGS_SCHEMA_URL, CAVEAT } from "../schemas/findings.js";
+import {
+  SCHEMA_VERSION,
+  FINDINGS_SCHEMA_URL,
+  CAVEAT,
+  FINDING_ID_CAVEAT,
+} from "../schemas/findings.js";
 
 // ─── Test fixtures ────────────────────────────────────────────────────────────
 
@@ -190,6 +195,15 @@ describe("renderMarkdownReport", () => {
     const md = renderMarkdownReport(artifact);
     expect(md).toContain("Flaught v0.4.1");
     expect(md).toContain("Schema v3");
+  });
+
+  it("includes the run-local finding ID caveat in the footer", () => {
+    const artifact = makeArtifact();
+    const md = renderMarkdownReport(artifact);
+    const footerStart = md.lastIndexOf("---");
+
+    expect(footerStart).toBeGreaterThanOrEqual(0);
+    expect(md.indexOf(FINDING_ID_CAVEAT, footerStart)).toBeGreaterThan(footerStart);
   });
 
   it("warns when the LLM review failed", () => {
