@@ -39,14 +39,14 @@ function makeFinding(overrides: Partial<Finding> = {}): Finding {
 }
 
 const minimalArtifact: FindingsArtifact = {
-  $schema: "https://flaught.dev/schemas/findings/v3.schema.json",
-  schema_version: 3,
+  $schema: "https://flaught.dev/schemas/findings/v4.schema.json",
+  schema_version: 4,
   _caveat: "This artifact is evidence that adversarial scrutiny occurred.",
   generated_at: "2026-08-22T00:00:00Z",
   flaught_version: "0.8.0",
   repository: { name: "flaught/core", url: "", branch: "main" },
   pull_request: { number: 42, url: null, title: null, description: null, base_sha: "abc123", head_sha: "def456" },
-  run: { id: "flaught-001", ci_url: null, duration_seconds: 10, llm_error: null },
+  run: { id: "flaught-001", ci_url: null, duration_seconds: 10, llm_error: null, usage: null },
   analysis_completeness: null,
   tools_executed: [],
   findings: [],
@@ -182,6 +182,26 @@ describe("buildInlineSummaryHeader", () => {
     const header = buildInlineSummaryHeader(artifact);
     expect(header).toContain("Skeptic");
     expect(header).toContain("confirmed");
+  });
+
+  it("omits the token line when usage is null", () => {
+    const header = buildInlineSummaryHeader({ ...minimalArtifact });
+    expect(header).not.toContain("🪙");
+    expect(header).not.toContain("Tokens:");
+  });
+
+  it("renders token usage in the summary header when present", () => {
+    const artifact = {
+      ...minimalArtifact,
+      run: { ...minimalArtifact.run,
+        usage: {
+          review: { prompt_tokens: 4200, completion_tokens: 850, total_tokens: 5050 },
+          refute: { prompt_tokens: 3100, completion_tokens: 400, total_tokens: 3500 },
+        },
+      },
+    };
+    const header = buildInlineSummaryHeader(artifact);
+    expect(header).toContain("🪙 Tokens: 8,550 (review 5,050 + refute 3,500)");
   });
 });
 
