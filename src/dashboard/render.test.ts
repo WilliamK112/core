@@ -15,6 +15,7 @@ function makePoint(overrides: Partial<TrendPoint> = {}): TrendPoint {
     refute: { confirmed: 1, refuted: 1, uncertain: 0 },
     dismissed_count: 0,
     llm_error: false,
+    usage: null,
     ...overrides,
   };
 }
@@ -57,5 +58,46 @@ describe("renderDashboardHtml", () => {
     const html = renderDashboardHtml([makePoint(), makePoint({ run_id: "run-2", total_findings: 5 })]);
     expect(html).toContain("<svg");
     expect(html).toContain("<path");
+  });
+
+  it("renders a Tokens column header in the table", () => {
+    const html = renderDashboardHtml([makePoint()]);
+    expect(html).toContain("<th>Tokens</th>");
+  });
+
+  it("shows an em dash for token usage when usage is null", () => {
+    const html = renderDashboardHtml([makePoint({ usage: null })]);
+    expect(html).toContain("<td>—</td>");
+  });
+
+  it("renders total token count and a Total tokens stat for points with usage", () => {
+    const html = renderDashboardHtml([
+      makePoint({
+        usage: {
+          review: { prompt_tokens: 4200, completion_tokens: 850, total_tokens: 5050 },
+          refute: { prompt_tokens: 3100, completion_tokens: 400, total_tokens: 3500 },
+        },
+      }),
+    ]);
+    // 5050 + 3500 = 8550 total
+    expect(html).toContain("8,550");
+    expect(html).toContain("Total tokens");
+  });
+
+  it("renders just the review total when refute usage is omitted", () => {
+    // A run where the refute pass was skipped/disabled/failed: usage.review
+    // present, no usage.refute. The cell must show the review total alone
+    // (not NaN, not blank), and the Total tokens stat must reflect only review.
+    const html = renderDashboardHtml([
+      makePoint({
+        usage: {
+          review: { prompt_tokens: 4200, completion_tokens: 850, total_tokens: 5050 },
+        },
+      }),
+    ]);
+    expect(html).toContain("5,050");
+    expect(html).toContain("Total tokens");
+    // Must not render the "(review ... + refute ...)" breakdown form.
+    expect(html).not.toContain("refute");
   });
 });

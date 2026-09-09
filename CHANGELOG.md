@@ -5,6 +5,83 @@ All notable changes to **@flaught/core** are documented here. The format is base
 [Semantic Versioning](https://semver.org/). For 0.x releases, a backwards-compatible
 feature bumps the minor version and a fix bumps the patch.
 
+## [0.11.0] - 2026-09-09
+
+Three backwards-compatible features and two fixes since `0.10.0`. The findings
+artifact schema advances v3 → v4 — additive (`run.usage` is `null` on older
+artifacts, no migration needed).
+
+### Added
+
+- **Token-usage persistence and reporting** (#73) — LLM token counts from the
+  provider response were printed once to the console and dropped. A new
+  `run.usage` field (findings schema v4) records review and refute token counts,
+  normalized across all providers (OpenAI, Groq, Anthropic, Gemini, Ollama). The
+  dashboard gains a Tokens column and a Total-tokens stat card, and the markdown
+  PR comment + inline review header show a one-line `🪙 Tokens: N (review X +
+  refute Y)` summary. `null` means "no data" (a `--no-llm` run, or the provider
+  returned no usage), not "zero tokens." Review and refute counts are kept
+  distinct because they are separate calls, possibly on different models.
+  Dollar cost is deliberately not computed — the raw counts are surfaced so a
+  reader can apply their own pricing.
+
+- **Skeptic re-derivation from stated intent** (#70) — the refute/skeptic pass
+  now independently re-derives what the code *should* do from the PR's stated
+  intent (or the change's evident purpose) and compares, rather than only
+  checking whether a finding's claim is visible in the code. The review prompt's
+  test-quality category now explicitly names tests that *cannot fail* —
+  symmetric inputs that can't distinguish a bug from its fix, assertions that
+  bake in the current output as correct, and happy-path-only tests. Grounded in
+  [Dan Luu's research on agent testing](https://danluu.com/agentic-testing/).
+
+- **Finding-ID stability caveat surfaced** (#67) — the caveat that finding IDs
+  are not stable across runs is now surfaced where users encounter it.
+
+### Changed
+
+- ⚠️ **Default LLM `max_tokens` raised (4096 → 8192), `reasoning_effort: low`
+  added, and `refute.max_tokens` raised (2048 → 4096)** for gpt-oss and other
+  reasoning models. This fixes Groq 400s on reasoning models (see Fixed) and
+  changes the defaults `flaught init` emits. Existing `.advreview.yml` files are
+  unaffected.
+
+- ⚠️ **Findings artifact schema v3 → v4** (#73). The new `run.usage` field is
+  additive; older artifacts deserialize with `usage: null` and need no
+  migration. Consumers validating against the v3 `$schema` URL should update to
+  `https://flaught.dev/schemas/findings/v4.schema.json`.
+
+### Fixed
+
+- **Config-injected command credential exfiltration** (#72) — a malicious PR
+  could edit `.advreview.yml` to inject shell commands (`linter.command`,
+  `vuln_scanner.command`, `test_inversion.command`) that ran in the review
+  workflow's environment with CI secrets. New `--config-from-base` flag (and
+  `FLAUGHT_CONFIG_FROM_BASE` env) loads `.advreview.yml` from the base ref via
+  `git show` instead of the working tree, so a PR can't change what commands
+  run. User-configured commands now spawn with a sanitized environment that
+  strips secret-bearing vars (`*_TOKEN`, `*_SECRET`, `*_API_KEY`, `*_PASSWORD`,
+  `*_CREDENTIAL`, `*_AUTH`, …) while preserving `PATH`/`HOME`/`LANG`/`CI`.
+  Auto-detected commands (`npm test`, `pytest`, …) are fixed strings and keep
+  the full environment.
+
+- **Groq 400 `failed_generation` on reasoning models** — gpt-oss ran at default
+  reasoning effort, spending the token budget on chain-of-thought and never
+  closing the JSON object. The OpenAI-compatible provider now retries once on a
+  400 carrying `failed_generation` (frequently transient), and the 400 error
+  self-diagnoses: it distinguishes truncation from malformed JSON, recommends
+  the exact config knobs (`max_tokens`, `reasoning_effort`) before suggesting a
+  model swap, and appends the first 200 chars of `failed_generation` for future
+  diagnosability.
+
+### Documentation
+
+- **README quick-start rewritten** (#74) as a five-stage prompt progression
+  (local deterministic → LLM pass → review/manage findings → blocking CI →
+  trends dashboard), with the bounded-loop discipline (stop after two passes,
+  never dismiss from a prompt) the homepage already stated.
+- **New `docs/git-hygiene.md`** (#71) — non-negotiable branch/commit/PR
+  discipline that applies to the maintainer too.
+
 ## [0.10.0] - 2026-09-07
 
 Four backwards-compatible features, one fix, and a new human-readable architecture
