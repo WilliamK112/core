@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { renderMarkdownReport } from "./markdown.js";
+import { renderSummaryReport } from "./summary.js";
 import { renderJsonArtifact } from "./json.js";
 import type { FindingsArtifact, Finding, NoiseBudget, Severity } from "../schemas/findings.js";
 import {
@@ -320,6 +321,123 @@ describe("renderMarkdownReport", () => {
     expect(md).toContain("2 deterministic tool(s) did not run");
     expect(md).toContain("`semgrep`");
     expect(md).toContain("`linter`");
+  });
+});
+
+describe("renderSummaryReport", () => {
+  it("renders every finding when fewer findings exist than the top limit", () => {
+    const artifact = makeArtifact({
+      findings: [
+        makeFinding({ id: "F-001", severity: "medium", title: "Medium finding" }),
+        makeFinding({ id: "F-002", severity: "high", title: "High finding" }),
+      ],
+    });
+
+    const summary = renderSummaryReport(artifact, { top: 5, failOn: "medium" });
+
+    expect(summary).toContain("2 findings need your eyes");
+    expect(summary).toContain("HIGH · src/routes/search.ts:47 · security · High finding");
+    expect(summary).toContain("MEDIUM · src/routes/search.ts:47 · security · Medium finding");
+    expect(summary.indexOf("High finding")).toBeLessThan(summary.indexOf("Medium finding"));
+  });
+
+  it("limits output and reports how many findings were omitted", () => {
+    const findings = Array.from({ length: 7 }, (_, index) => makeFinding({
+      id: `F-${String(index + 1).padStart(3, "0")}`,
+      title: `Finding ${index + 1}`,
+      evidence: {
+        ...makeFinding().evidence,
+        file: `src/${String(index + 1).padStart(2, "0")}.ts`,
+      },
+    }));
+    const summary = renderSummaryReport(makeArtifact({ findings }), { top: 5 });
+
+    expect(summary).toContain("7 findings need your eyes");
+    expect(summary).toContain("Finding 5");
+    expect(summary).not.toContain("Finding 6");
+    expect(summary).toContain("… 2 more findings not shown.");
+  });
+
+  it("renders a compact zero-findings header", () => {
+    const summary = renderSummaryReport(makeArtifact({ findings: [] }));
+
+    expect(summary).toBe("0 findings need your eyes");
+  });
+
+  it("sorts findings by severity, file, and line", () => {
+    const artifact = makeArtifact({
+      findings: [
+        makeFinding({
+          id: "F-001",
+          severity: "medium",
+          title: "Medium",
+          evidence: { ...makeFinding().evidence, file: "src/a.ts", line_start: 1, line_end: 1 },
+        }),
+        makeFinding({
+          id: "F-002",
+          severity: "high",
+          title: "Later file",
+          evidence: { ...makeFinding().evidence, file: "src/b.ts", line_start: 1, line_end: 1 },
+        }),
+        makeFinding({
+          id: "F-003",
+          severity: "high",
+          title: "Later line",
+          evidence: { ...makeFinding().evidence, file: "src/a.ts", line_start: 20, line_end: 20 },
+        }),
+        makeFinding({
+          id: "F-004",
+          severity: "high",
+          title: "First",
+          evidence: { ...makeFinding().evidence, file: "src/a.ts", line_start: 2, line_end: 2 },
+        }),
+      ],
+    });
+
+    const lines = renderSummaryReport(artifact, { failOn: "medium" }).split("\n");
+    expect(lines.slice(1)).toEqual([
+      "HIGH · src/a.ts:2 · security · First",
+      "HIGH · src/a.ts:20 · security · Later line",
+      "HIGH · src/b.ts:1 · security · Later file",
+      "MEDIUM · src/a.ts:1 · security · Medium",
+    ]);
+  });
+
+  it("excludes dismissed and below-gate findings", () => {
+    const artifact = makeArtifact({
+      findings: [
+        makeFinding({ id: "F-001", severity: "critical", title: "Dismissed", dismissed: true }),
+        makeFinding({ id: "F-002", severity: "medium", title: "Below gate" }),
+        makeFinding({ id: "F-003", severity: "high", title: "Needs attention" }),
+      ],
+    });
+
+    const summary = renderSummaryReport(artifact, { failOn: "high" });
+    expect(summary).toContain("1 finding needs your eyes");
+    expect(summary).toContain("Needs attention");
+    expect(summary).not.toContain("Dismissed");
+    expect(summary).not.toContain("Below gate");
+  });
+
+  it("includes every undismissed severity when the gate is disabled", () => {
+    const artifact = makeArtifact({
+      findings: [makeFinding({ severity: "info", title: "Informational finding" })],
+    });
+
+    expect(renderSummaryReport(artifact, { failOn: "none" })).toContain("Informational finding");
+  });
+
+  it("points to the full JSON artifact when an output path is supplied", () => {
+    const summary = renderSummaryReport(makeArtifact(), {
+      artifactPath: "/tmp/findings.json",
+    });
+
+    expect(summary).toContain("Full artifact: /tmp/findings.json");
+  });
+
+  it("rejects non-positive and fractional top limits", () => {
+    expect(() => renderSummaryReport(makeArtifact(), { top: 0 })).toThrow("positive integer");
+    expect(() => renderSummaryReport(makeArtifact(), { top: 1.5 })).toThrow("positive integer");
   });
 });
 

@@ -146,11 +146,18 @@ flaught review                  # full adversarial review vs the merge-base with
 flaught review --base main      # review against main
 flaught review --no-llm         # deterministic tools only (no API key)
 flaught review --output findings.json --quiet   # CI mode
+flaught review --summary --output findings.json # short stdout + full JSON artifact
 flaught dismiss D-0002 --artifact findings.json --reason "..." # suppress a false positive, persisted across runs
 flaught dismissals list         # show suppressed findings
 flaught dismissals audit        # flag expired dismissals
 flaught dashboard --input ./ci-artifacts --output dashboard.html
 ```
+
+`--summary` prints only the highest-signal findings that meet the configured
+severity gate, ordered by severity and file. It shows at most five by default;
+use `--summary-top N` to change the limit. When the severity gate is disabled,
+the summary includes all undismissed findings. Pair it with `--output` to keep
+the complete JSON artifact while making stdout a short human handoff.
 
 `--no-llm` still runs dependency sanity on newly added `package.json` packages.
 That check queries the public npm registry (`registry.npmjs.org` / `api.npmjs.org`)
