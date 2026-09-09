@@ -12,7 +12,7 @@
  *   flaught init                            # scaffold .advreview.yml
  */
 
-import { Command } from "commander";
+import { Command, InvalidArgumentError } from "commander";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { simpleGit } from "simple-git";
@@ -22,7 +22,7 @@ import { simpleGit } from "simple-git";
 const pkgVersion: string = require("../package.json").version;
 
 import { contextToJSON } from "./context/assembler.js";
-import { runReview, type ProgressCallback } from "./review.js";
+import { runReview, type ProgressCallback, type ReviewResult } from "./review.js";
 import { initConfig, loadConfig } from "./config.js";
 import { LLMError, MissingAPIKeyError } from "./llm/provider.js";
 import { ModelNotFoundError } from "./llm/liveness.js";
@@ -39,6 +39,7 @@ import {
 } from "./dismissals/store.js";
 import { initPromptTemplates } from "./prompt/templates.js";
 import { runDashboard } from "./dashboard/command.js";
+import { renderSummaryReport, DEFAULT_SUMMARY_TOP } from "./report/summary.js";
 
 const program = new Command();
 
@@ -81,6 +82,8 @@ program
   .option("--config-from-base", "Load .advreview.yml from the --base ref instead of the working tree, so a malicious PR can't inject shell commands via config edits (requires --base)")
   .option("--pr-description <text>", "PR description for scope-creep detection")
   .option("--quiet", "Only output the final report, no progress messages")
+  .option("--summary", "Print a short, human-first report instead of the full Markdown report")
+  .option("--summary-top <n>", "Maximum findings shown by --summary", parseSummaryTop, DEFAULT_SUMMARY_TOP)
   .option("--github-inline", "Post findings as inline PR comments on diff lines (requires GITHUB_TOKEN)")
   .action(async (opts) => {
     try {
@@ -166,7 +169,7 @@ program
     }
   });
 
-async function runCliReview(opts: {
+interface CliReviewOptions {
   repo?: string;
   base?: string;
   head?: string;
@@ -176,13 +179,37 @@ async function runCliReview(opts: {
   llm?: boolean;
   prDescription?: string;
   quiet?: boolean;
+  summary?: boolean;
+  summaryTop?: number;
   githubInline?: boolean;
   emitContext?: string;
   onlyLlm?: boolean;
   context?: string;
   findings?: string;
   configFromBase?: boolean;
-}): Promise<void> {
+}
+
+function parseSummaryTop(value: string): number {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new InvalidArgumentError("must be a positive integer");
+  }
+  return parsed;
+}
+
+async function renderCliReport(result: ReviewResult, opts: CliReviewOptions): Promise<string> {
+  if (!opts.summary) return result.markdown;
+
+  const repoPath = opts.repo ? path.resolve(opts.repo) : undefined;
+  const config = await loadConfig(opts.config, repoPath);
+  return renderSummaryReport(result.artifact, {
+    top: opts.summaryTop,
+    failOn: config.severity_gate.fail_on,
+    artifactPath: opts.output ? path.resolve(opts.output) : undefined,
+  });
+}
+
+async function runCliReview(opts: CliReviewOptions): Promise<void> {
   const progress: ProgressCallback = opts.quiet
     ? () => {}
     : (msg) => console.error(msg);
@@ -218,7 +245,7 @@ async function runCliReview(opts: {
       skipRefute: (opts as Record<string, unknown>).refute === false,
       onProgress: progress,
     });
-    console.log(result.markdown);
+    console.log(await renderCliReport(result, opts));
     if (result.llmError) {
       console.error(`\n⚠️ LLM review failed: ${result.llmError}`);
       console.error(`  Review completed with deterministic findings only. LLM findings are not included.`);
@@ -245,8 +272,8 @@ async function runCliReview(opts: {
     onProgress: progress,
   });
 
-  // Output markdown report to stdout
-  console.log(result.markdown);
+  // Output the full Markdown report or the short, human-first summary.
+  console.log(await renderCliReport(result, opts));
 
   // Warn if LLM review failed but deterministic findings are still available
   if (result.llmError) {
